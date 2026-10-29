@@ -1,0 +1,6 @@
+{
+  "name": "usage-band",
+  "owner": { "name": "Josh Kerr" },
+  "description": "A slim usage and prompt-cache band above the Claude Code prompt.",
+  "plugins": [{ "name": "usage-band", "source": "./" }]
+}
