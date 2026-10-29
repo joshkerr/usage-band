@@ -2,11 +2,14 @@ import { atom, read, update } from 'claude-code'
 import type { EngineInterface, Register } from 'claude-code'
 
 import type { CacheFacts, Window } from '../types'
+import { HUE, ROBO_SIZE, roboSvg } from './robo'
+import type { Mode } from './robo'
 
 // One slim row above the prompt. Three facts, left to right:
 //   7D  ●●●●●●●···  68% left · 3d 9h      the 7-day window, what is LEFT, and its reset
 //   5H  ●●●●●●●●●·  92% left · 2h 14m     the 5-hour window, the same
-//   CACHE  WARM 47m left                   the prompt cache: WARM, COOLING (last 10 min) or COLD
+//   [robo]  WARM 47m left                  the prompt cache: WARM, COOLING (last 10 min) or COLD,
+//                                          led by Robo, who bobs while warm and freezes when cold
 //
 // Zero token cost: it reads the engine's own usage figures and draws them.
 // Narrow bands stack each window into a small block; the terminal gets the same facts as text.
@@ -34,9 +37,7 @@ const EMPTY = '#4a463b'
 const ORANGE = '#ff6b1a'
 const YELLOW = '#f5a623'
 const INK = '#1c1a16'
-const HUE = { warm: '#d9534f', cooling: '#e0a030', cold: '#6aaabd' } as const
 
-type Mode = keyof typeof HUE
 type Kind = 'wide' | 'stacked' | 'tight'
 
 const windows = atom({ plugin: 'usage-band', key: 'windows' } as const, [] as Window[])
@@ -151,7 +152,11 @@ export const register: Register = on => {
   on('ui.render', { component: 'AbovePrompt' }, async ($, e, next) => {
     if (e.props.hasSurvey) return next(e)
 
-    const { Box, Text } = $.ui.resolve(e)
+    const ui = $.ui.resolve(e)
+    const { Box, Text } = ui
+    // Robo is a drawing: desktop, VS Code and mobile draw it; the terminal has no Svg.
+    // Ask the surface, not the table: the terminal's table still lists Svg.
+    const Svg = e.surface !== 'terminal' && 'Svg' in ui ? ui.Svg : null
     const list = await read($, windows)
     const now = await $.clock.now()
     const view = viewOf(await read($, cache), now)
@@ -224,6 +229,18 @@ export const register: Register = on => {
 
     const hue = HUE[view.mode]
     const word = view.mode.toUpperCase()
+    // Robo leads the cache in place of a label: two cells wide instead of six, so the row fits.
+    const icon = Svg ? (
+      <Box key="robo" flexShrink={0} marginRight={1}>
+        <Svg
+          source={roboSvg(view.mode)}
+          alt={view.mode === 'cold' ? 'Robo, frozen' : 'Robo, bobbing'}
+          width={ROBO_SIZE}
+          height={ROBO_SIZE}
+          isInteractive
+        />
+      </Box>
+    ) : null
     const chip = <Text key="chip" backgroundColor={hue} color={INK} bold>{` ${word} `}</Text>
     const detail = [
       <Text key="state" color={hue} bold>{` ${view.label}`}</Text>,
@@ -236,7 +253,7 @@ export const register: Register = on => {
           {label}
           {usage}
           <Box key="cache" flexDirection="row" flexShrink={0} alignItems="center">
-            <Text color={MUTED} bold>CACHE </Text>
+            {icon}
             {chip}
             {detail}
           </Box>
@@ -250,7 +267,7 @@ export const register: Register = on => {
           {label}
           {usage}
           <Box key="cache" flexDirection="column" flexShrink={0}>
-            <Box flexDirection="row"><Text color={MUTED} bold>CACHE </Text>{chip}</Box>
+            <Box flexDirection="row" alignItems="center">{icon}{chip}</Box>
             <Text color={hue} bold>{view.label}</Text>
             {view.tokens > 0 ? <Text color={MUTED}>{fmtTokens(view.tokens)} tokens</Text> : null}
           </Box>
@@ -266,7 +283,7 @@ export const register: Register = on => {
           {usage}
         </Box>
         <Box key="cache" flexDirection="row" paddingX={1} alignItems="center">
-          <Text color={MUTED} bold>CACHE </Text>
+          {icon}
           {chip}
           {detail}
         </Box>

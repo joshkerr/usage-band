@@ -52,6 +52,10 @@ test('a resumed session 18 minutes idle shows WARM with 42m left and the cached 
   expect(await band.find({ text: ' WARM ' })).toBeDefined()
   expect(await band.find({ text: ' 42m left' })).toBeDefined()
   expect(await band.find({ text: ' · 245k tokens' })).toBeDefined()
+  // Robo leads the cache on the desktop, in place of a text label.
+  const alts = (await band.findAll({ type: 'Svg' })).map(s => s.props.alt)
+  expect(alts).toEqual(['Robo, bobbing'])
+  expect(await band.find({ text: 'CACHE ' })).toBeUndefined()
   await band.unmount()
 })
 
@@ -67,7 +71,13 @@ test('55 minutes idle reads COOLING; three days idle reads COLD with the idle ti
   const cold = await $.ui.mount({ plugin: 'usage-band', surface: 'terminal', component: 'AbovePrompt', props: PROPS })
   expect(await cold.find({ text: ' COLD ' })).toBeDefined()
   expect(await cold.find({ text: ' 3d 9h idle' })).toBeDefined()
+  // The terminal has no drawings: the chip alone leads the cache.
+  expect(await cold.findAll({ type: 'Svg' })).toEqual([])
   await cold.unmount()
+
+  const desktop = await $.ui.mount({ plugin: 'usage-band', surface: 'desktop', component: 'AbovePrompt', props: PROPS })
+  expect((await desktop.findAll({ type: 'Svg' })).map(s => s.props.alt)).toEqual(['Robo, frozen'])
+  await desktop.unmount()
 })
 
 test('a cleared session drops the cache until the next reply', async ($, on) => {

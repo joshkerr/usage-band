@@ -4,7 +4,7 @@ A slim band above the Claude Code prompt that shows three things at a glance:
 
 - **7D**: how much of your 7-day usage window is left, and when it resets.
 - **5H**: how much of your 5-hour window is left, and when it resets.
-- **CACHE**: whether your prompt cache is **WARM**, **COOLING** (under 10 minutes left) or **COLD**, with the minutes left or the idle time, and how many tokens the cache holds.
+- **Robo and the cache chip**: whether your prompt cache is **WARM**, **COOLING** (under 10 minutes left) or **COLD**, with the minutes left or the idle time, and how many tokens the cache holds. Robo, the pixel robot from ribbon, bobs while the cache is warm and sits frozen in ice when it is cold. The terminal has no drawings, so there the chip stands alone.
 
 Each dot bar shows what is left, not what is used. A window under 15% adds a bold **LOW**. The band redraws every 30 seconds so countdowns stay current, and it costs nothing to run: it reads the app's own usage figures and never calls a model.
 
