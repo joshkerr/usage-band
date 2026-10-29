@@ -9,7 +9,7 @@ const PROPS = {
   hasSurvey: false,
   isWorking: false,
   maxRows: 4,
-  bodyColumns: 100,
+  bodyColumns: 120,
   scroll: { offset: 0, bodyRows: 4 },
   view: {},
 } as const
@@ -51,12 +51,30 @@ test('a resumed session 18 minutes idle shows WARM with 42m left and the cached 
   const band = await $.ui.mount({ plugin: 'usage-band', surface: 'desktop', component: 'AbovePrompt', props: PROPS })
   expect(await band.find({ text: ' WARM ' })).toBeDefined()
   expect(await band.find({ text: ' 42m left' })).toBeDefined()
-  expect(await band.find({ text: ' · 245k tokens' })).toBeDefined()
+  expect(await band.find({ text: ' · 245k' })).toBeDefined()
   // Robo leads the cache on the desktop, in place of a text label.
   const alts = (await band.findAll({ type: 'Svg' })).map(s => s.props.alt)
   expect(alts).toEqual(['Robo, bobbing'])
   expect(await band.find({ text: 'CACHE ' })).toBeUndefined()
   await band.unmount()
+})
+
+test('a row a few cells too long drops the token count before it stacks', async ($, on) => {
+  await boot($, on)
+  await $.classic.SessionStart({ source: 'resume', seconds_since_last_response: 18 * 60, context_tokens: 245000 })
+  // 94 columns: the full row with Robo runs to about 97 cells, so the count goes and the row stays.
+  const band = await $.ui.mount({ plugin: 'usage-band', surface: 'desktop', component: 'AbovePrompt', props: { ...PROPS, bodyColumns: 94 } })
+  expect(await band.find({ text: ' 42m left' })).toBeDefined()
+  expect(await band.find({ key: 'tok' })).toBeUndefined()
+  // Still one row: the 7D block is a row, not a stacked column.
+  expect((await band.find({ key: 'w-0' }))?.props.flexDirection).toBe('row')
+  await band.unmount()
+
+  // 80 columns: too narrow even without the tokens, so each window stacks and the tokens are back on their own line.
+  const half = await $.ui.mount({ plugin: 'usage-band', surface: 'desktop', component: 'AbovePrompt', props: { ...PROPS, bodyColumns: 80 } })
+  expect((await half.find({ key: 'w-0' }))?.props.flexDirection).toBe('column')
+  expect(await half.find({ text: '245k tokens' })).toBeDefined()
+  await half.unmount()
 })
 
 test('55 minutes idle reads COOLING; three days idle reads COLD with the idle time', async ($, on) => {

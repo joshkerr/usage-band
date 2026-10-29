@@ -25,9 +25,10 @@ const TTL_MS = TTL_MIN * 60_000
 const COOLING_AT_MIN = 10
 /** How often the band redraws, so countdowns and the warm-to-cold flip stay current. */
 const TICK_MS = 30_000
-/** One row fits two windows and the cache at about 78 columns; under 42 the bars shrink too. */
-const WIDE_AT = 78
-const TIGHT_AT = 42
+/** Under this many columns the stacked blocks no longer fit: the bars shrink and the cache takes its own row. */
+const TIGHT_AT = 56
+/** Robo's box and the gap after it, in cells, when the surface draws him. */
+const ROBO_CELLS = 4
 
 // Colours: the band's own warm dark look.
 const BG = '#24221c'
@@ -75,8 +76,6 @@ const fmtReset = (iso: string | undefined, now: number): string => {
 }
 
 const fmtTokens = (n: number): string => (n >= 1000 ? `${Math.round(n / 1000)}k` : `${n}`)
-
-const kindOf = (columns: number): Kind => (columns >= WIDE_AT ? 'wide' : columns >= TIGHT_AT ? 'stacked' : 'tight')
 
 type CacheView = { mode: Mode; label: string; tokens: number }
 
@@ -162,11 +161,8 @@ export const register: Register = on => {
     const view = viewOf(await read($, cache), now)
 
     const columns = e.props.bodyColumns ?? e.viewport?.columns ?? 100
-    const kind = kindOf(columns)
-    const isWide = kind === 'wide'
-    const cells = kind === 'tight' ? TIGHT_CELLS : CELLS
 
-    const parts = (w: Window) => {
+    const parts = (w: Window, cells: number) => {
       const left = Math.max(0, Math.round((100 - w.percentUsed) * 10) / 10)
       return {
         left,
@@ -176,9 +172,36 @@ export const register: Register = on => {
         reset: fmtReset(w.resetsAt, now),
       }
     }
+    type Parts = ReturnType<typeof parts>
+
+    // The row shows the bare count ("· 245k"); the stacked block has a line to spare for the word.
+    const tokens = view && view.tokens > 0 ? ` · ${fmtTokens(view.tokens)}` : ''
+
+    // How many cells the one-row layout takes, counted from the strings it would draw,
+    // so the choice fits this width instead of a guessed one. The token count is the
+    // first thing to go when the row is a few cells too long; stacking comes after.
+    const rowLen = (ps: Parts[], withTokens: boolean): number => {
+      let n = 2 + 'USAGE'.length + 2
+      for (const p of ps) {
+        n += p.name.length + 1 + CELLS + 1 + `${p.left}% left`.length
+        if (p.left < LOW_AT) n += ' LOW'.length
+        if (p.reset) n += 3 + p.reset.length
+        n += 3
+      }
+      if (view) {
+        n += (Svg ? ROBO_CELLS : 0) + view.mode.length + 2 + 1 + view.label.length
+        if (withTokens) n += tokens.length
+      }
+      return n
+    }
+    const wideParts = list.map(w => parts(w, CELLS))
+    const showTokens = rowLen(wideParts, true) <= columns
+    const kind: Kind = showTokens || rowLen(wideParts, false) <= columns ? 'wide' : columns >= TIGHT_AT ? 'stacked' : 'tight'
+    const isWide = kind === 'wide'
+    const cells = kind === 'tight' ? TIGHT_CELLS : CELLS
 
     const wide = (w: Window, i: number) => {
-      const p = parts(w)
+      const p = parts(w, cells)
       return (
         <Box key={`w-${i}`} flexDirection="row" flexShrink={0} marginRight={3}>
           <Text color={MUTED} bold>{p.name} </Text>
@@ -192,7 +215,7 @@ export const register: Register = on => {
     }
 
     const stacked = (w: Window, i: number) => {
-      const p = parts(w)
+      const p = parts(w, cells)
       return (
         <Box key={`w-${i}`} flexDirection="column" flexShrink={0} marginRight={3}>
           <Box flexDirection="row">
@@ -244,7 +267,7 @@ export const register: Register = on => {
     const chip = <Text key="chip" backgroundColor={hue} color={INK} bold>{` ${word} `}</Text>
     const detail = [
       <Text key="state" color={hue} bold>{` ${view.label}`}</Text>,
-      view.tokens > 0 ? <Text key="tok" color={MUTED}> · {fmtTokens(view.tokens)} tokens</Text> : null,
+      tokens && (showTokens || !isWide) ? <Text key="tok" color={MUTED}>{tokens}</Text> : null,
     ]
 
     if (kind === 'wide') {
