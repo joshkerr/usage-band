@@ -1,6 +1,6 @@
 {
   "name": "usage-band",
-  "version": "0.1.0",
+  "version": "0.1.1",
   "description": "A slim band above the prompt: usage left in the 7-day and 5-hour windows, when each resets, and whether the prompt cache is warm, cooling or cold.",
   "license": "MIT",
   "types": "./types/index.d.ts"

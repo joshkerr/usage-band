@@ -149,10 +149,21 @@ export const register: Register = on => {
   })
 
   on('ui.render', { component: 'AbovePrompt' }, async ($, e, next) => {
-    if (e.props.hasSurvey) return next(e)
+    // The band is one slot that every mod shares: whatever the mods beneath draw
+    // there is stacked under this band, never hidden by it.
+    const below = await next(e)
+    if (e.props.hasSurvey) return below
 
     const ui = $.ui.resolve(e)
     const { Box, Text } = ui
+    // `engine` is the engine's own band, which draws nothing of its own here.
+    const stack = (own: JSX.Element): JSX.Element =>
+      below.type === 'engine' ? own : (
+        <Box flexDirection="column">
+          {own}
+          {below}
+        </Box>
+      )
     // Robo is a drawing: desktop, VS Code and mobile draw it; the terminal has no Svg.
     // Ask the surface, not the table: the terminal's table still lists Svg.
     const Svg = e.surface !== 'terminal' && 'Svg' in ui ? ui.Svg : null
@@ -242,11 +253,11 @@ export const register: Register = on => {
       : [<Box key="wait" flexShrink={0} marginRight={3}><Text color={MUTED}>waiting for the first reply</Text></Box>]
 
     if (!view) {
-      return (
+      return stack(
         <Box flexDirection="row" backgroundColor={BG} paddingX={1}>
           {label}
           {usage}
-        </Box>
+        </Box>,
       )
     }
 
@@ -271,7 +282,7 @@ export const register: Register = on => {
     ]
 
     if (kind === 'wide') {
-      return (
+      return stack(
         <Box flexDirection="row" backgroundColor={BG} paddingX={1} alignItems="center">
           {label}
           {usage}
@@ -280,12 +291,12 @@ export const register: Register = on => {
             {chip}
             {detail}
           </Box>
-        </Box>
+        </Box>,
       )
     }
 
     if (kind === 'stacked') {
-      return (
+      return stack(
         <Box flexDirection="row" backgroundColor={BG} paddingX={1}>
           {label}
           {usage}
@@ -294,12 +305,12 @@ export const register: Register = on => {
             <Text color={hue} bold>{view.label}</Text>
             {view.tokens > 0 ? <Text color={MUTED}>{fmtTokens(view.tokens)} tokens</Text> : null}
           </Box>
-        </Box>
+        </Box>,
       )
     }
 
     // Tight: the cache takes its own row under the usage blocks.
-    return (
+    return stack(
       <Box flexDirection="column" backgroundColor={BG}>
         <Box flexDirection="row" paddingX={1}>
           {label}
@@ -310,7 +321,7 @@ export const register: Register = on => {
           {chip}
           {detail}
         </Box>
-      </Box>
+      </Box>,
     )
   })
 }

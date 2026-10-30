@@ -14,9 +14,11 @@ const PROPS = {
   view: {},
 } as const
 
-const boot = async ($: any, on: any) => {
+/** Stands beneath the plugin as the engine does; `below` is what another mod beneath draws in the band, else the engine's own, empty. */
+const boot = async ($: any, on: any, below?: ($: any, e: any) => unknown) => {
   mock.store(on)
   mock.clock(on, { now: NOW })
+  on('ui.render', ($: any, e: any) => (below ? below($, e) : { type: 'engine', ref: 0 }))
   on('session.start', ($: any, e: any) => ({ cwd: e.cwd }))
   on('session.usage', () => ({ value: { startedAt: 0, context: { window: 200000 }, rateLimits: WINDOWS } }))
   on('classic.SessionStart', () => ({}))
@@ -106,4 +108,22 @@ test('a cleared session drops the cache until the next reply', async ($, on) => 
   expect(await band.find({ key: 'cache' })).toBeUndefined()
   expect(await band.find({ text: '87.5% left' })).toBeDefined()
   await band.unmount()
+})
+
+test('a band another mod draws beneath is stacked under the usage band, never hidden', async ($, on) => {
+  await boot($, on, ($, e) => {
+    const { Box, Text } = $.ui.resolve(e)
+    return Box({ flexDirection: 'row', children: [Text({ children: ['⎇ main'] })] })
+  })
+  for (const surface of ['terminal', 'desktop'] as const) {
+    const band = await $.ui.mount({ plugin: 'usage-band', surface, component: 'AbovePrompt', props: PROPS })
+    expect(await band.find({ text: '87.5% left' })).toBeDefined()
+    expect(await band.find({ text: '⎇ main' })).toBeDefined()
+    // The usage band first, the other mod's band under it.
+    const outer = await band.find({ type: 'Box' })
+    expect(outer?.props.flexDirection).toBe('column')
+    const all = JSON.stringify(outer)
+    expect(all.indexOf('USAGE')).toBeLessThan(all.indexOf('⎇ main'))
+    await band.unmount()
+  }
 })
